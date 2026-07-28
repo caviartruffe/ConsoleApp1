@@ -15,5 +15,6 @@ namespace ConsoleApp1
         public string MessageTextNormal { get; set; } = string.Empty;
         public string MessageTextError { get; set; } = string.Empty;
         public static Settings Default { get; private set; } = new();
+        public string RegFolder { get; internal set; } = $"C:\\tools";
     }
 }

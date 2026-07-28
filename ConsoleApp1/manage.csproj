@@ -15,4 +15,10 @@
     <PackageReference Include="SSH.NET" Version="2025.1.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="log4net..config">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>
