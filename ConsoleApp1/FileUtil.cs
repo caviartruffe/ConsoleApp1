@@ -78,5 +78,63 @@ namespace manage
             // チェックポイントファイルのないフォルダは対象外
             return FolderState.None;
         }
+
+        public enum FileType
+        {
+            /// <summary>
+            /// Microsoft Officeファイル
+            /// </summary>
+            OfficeFile,
+            /// <summary>
+            /// DWG/DXFファイル
+            /// </summary>
+            DxfFile,
+            /// <summary>
+            /// iCAD/MXファイル
+            /// </summary>
+            MxFile,
+            /// <summary>
+            /// その他
+            /// </summary>
+            Others
+        }
+
+
+        private static FileType GetFileType(string filePath)
+        {
+            // 2. 拡張子とファイルタイプのマッピングを定義
+            // HashSet（ハッシュセット）を使うことで、拡張子の検索を高速に行えます
+            // ※　設定ファイルクラスに
+            var imageExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".gif" };
+            var documentExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".pdf", ".docx", ".xlsx", ".txt" };
+            var audioExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".mp3", ".wav", ".flac", ".aac" };
+
+            List<string> _list = new List<string>();
+            HashSet<string> _test = new HashSet<string>(_list, StringComparer.OrdinalIgnoreCase);
+
+            // 3. ファイルパスから拡張子を取得（例: ".docx"）
+            // Path.GetExtension は大文字小文字を維持するため、判定時は注意が必要です
+            string extension = Path.GetExtension(filePath);
+
+            // 4. 拡張子のリストを元にファイルタイプを識別
+            FileType fileType;
+            if (imageExtensions.Contains(extension))
+            {
+                fileType = FileType.OfficeFile;
+            }
+            else if (documentExtensions.Contains(extension))
+            {
+                fileType = FileType.DxfFile;
+            }
+            else if (audioExtensions.Contains(extension))
+            {
+                fileType = FileType.MxFile;
+            }
+            else
+            {
+                fileType = FileType.Others;
+            }
+            return fileType;
+        }
     }
 }
