@@ -1,0 +1,10 @@
+{
+  "ApplicationConfig": {
+    "ExtensionsOffice": [ "xls", "xlsx", "xlsm", "doc", "docx", "docm", "ppt", "pptx" ],
+    "ExtensionsAutoCad": [ "dwg", "dxf" ],
+    "ExtensionsIcadMx": [ "mx2" ],
+    "CommandLineOffice": "offcecv {%0} {%1}",
+    "CommandLineAutoCad": "offcecv {%0} {%1}",
+    "CommandLineIcadMx": "offcecv {%0} {%1}"
+  }
+}

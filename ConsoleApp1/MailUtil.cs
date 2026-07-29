@@ -55,7 +55,7 @@ namespace ConsoleApp1
             }
         }
 
-        private static MimeMessage ComposeMessage(DocumentInfo iinfo, string template)
+        private static MimeMessage ComposeMessage(DocumentInfo info, string template)
         {
             // 1. メールメッセージの作成
             var message = new MimeMessage();

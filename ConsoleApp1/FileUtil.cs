@@ -1,4 +1,5 @@
 ﻿using ConsoleApp1;
+using log4net;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -10,8 +11,12 @@ namespace manage
 {
     public class FileUtil
     {
+        // log4net
+        private static readonly ILog _logger = LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod()!.DeclaringType!);
+
         public static List<string> ScanRegFolder()
         {
+            _logger.Info("test2");
             var regFolders = new List<string>();
 			try
 			{
