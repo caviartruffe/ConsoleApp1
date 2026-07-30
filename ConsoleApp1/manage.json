@@ -5,6 +5,8 @@
     "ExtensionsIcadMx": [ "mx2" ],
     "CommandLineOffice": "offcecv {%0} {%1}",
     "CommandLineAutoCad": "offcecv {%0} {%1}",
-    "CommandLineIcadMx": "offcecv {%0} {%1}"
+    "CommandLineIcadMx": "offcecv {%0} {%1}",
+    "SettingsPath": ""
+
   }
 }

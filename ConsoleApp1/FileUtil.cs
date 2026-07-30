@@ -58,7 +58,6 @@ namespace manage
             Converted,
             Sent,
             None
-
         }
 
         /// <summary>
@@ -140,6 +139,42 @@ namespace manage
                 fileType = FileType.Others;
             }
             return fileType;
+        }
+
+        public enum SftpFunction
+        {
+            /// <summary>
+            /// 
+            /// </summary>
+            Numbering = 0,
+            /// <summary>
+            /// 
+            /// </summary>
+            Relation = 1,
+            /// <summary>
+            /// 
+            /// </summary>
+            Registration = 2
+        }
+
+        public static void CreateSftpControlFile()
+        {
+            var lines = new List<string>
+        {
+            string.Join("\t", new[] { "ID", "名前", "年齢" }),
+            string.Join("\t", new[] { "1", "Taro", "25" }),
+            string.Join("\t", new[] { "2", "Hanako", "30" })
+        };
+
+            // ファイルパスを指定して出力（UTF-8）
+            string filePath = "output.tsv";
+            File.WriteAllLines(filePath, lines);
+        }
+
+        public static string GetSftpCOntrolFileBasename(SftpFunction func, int no)
+        {
+            var basename = $"XXXX_B-{func}_{no}_{DateTime.Now.ToString("yyyyMMddHHmmssfff")}";
+            return basename;
         }
     }
 }

@@ -1,0 +1,93 @@
+using System.Diagnostics;
+
+namespace WorkerServiceMonitor;
+
+public class Worker : BackgroundService
+{
+    private readonly ILogger<Worker> _logger;
+    
+    // 外部プログラムの設定（環境に合わせて書き換えてください）
+    private const string AppPath = @"C:\ProgramFiles\YourApp\ParentCuiApp.exe";
+    private const string Arguments = "--run";
+    
+    // タイムアウト時間（例：5分。テスト時は TimeSpan.FromSeconds(10) などに縮めてください）
+    private readonly TimeSpan _timeout = TimeSpan.FromMinutes(5); 
+
+    public Worker(ILogger<Worker> logger)
+    {
+        _logger = logger;
+    }
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        _logger.LogInformation("プロセス監視サービスが起動しました。");
+
+        // サービスが停止される（stoppingTokenが発火する）まで無限ループ
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                _logger.LogInformation("外部プログラムを起動します: {Path}", AppPath);
+
+                var startInfo = new ProcessStartInfo
+                {
+                    FileName = AppPath,
+                    Arguments = Arguments,
+                    CreateNoWindow = true,       // 画面（CUIコンソール窓）を作らない
+                    UseShellExecute = false      // プロセスを直接起動する（必須）
+                };
+
+                using (var process = Process.Start(startInfo))
+                {
+                    if (process == null)
+                    {
+                        _logger.LogError("プロセスの起動に失敗しました。");
+                        await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken); // 30秒待って再試行
+                        continue;
+                    }
+
+                    // 指定したタイムアウト時間、またはサービス停止要求が来るまで待機
+                    // Task.WaitAny を使い、「プロセスの終了」か「タイムアウト」か「サービス停止」を待つ
+                    var processExitTask = process.WaitForExitAsync(stoppingToken);
+                    var timeoutTask = Task.Delay(_timeout, stoppingToken);
+
+                    var completedTask = await Task.WhenAny(processExitTask, timeoutTask);
+
+                    if (completedTask == timeoutTask && !process.HasExited)
+                    {
+                        // 【ここがポイント】タイムアウト時間を超えてもプロセスが生きている場合
+                        _logger.LogWarning("プロセスがタイムアウト（{Timeout}）を超過したため、強制終了します。PID: {Id}", _timeout, process.Id);
+                        
+                        // .NET (Core) の新機能：entireProcessTree に true を指定することで、
+                        // このCUIがさらに起動したGUI（子プロセス）もまとめて一網打尽にKillします。
+                        process.Kill(entireProcessTree: true);
+                        
+                        // Killが完了するまで念のため少し待つ
+                        await process.WaitForExitAsync(stoppingToken);
+                    }
+                    else
+                    {
+                        // 正常に終了した場合
+                        _logger.LogInformation("プロセスが正常に終了しました。終了コード: {Code}", process.ExitCode);
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // サービス停止時のキャンセル例外は無視して終了へ向かう
+                _logger.LogInformation("サービスの停止要求を受け取りました。");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "予期せぬエラーが発生しました。");
+            }
+
+            // 次の起動までのインターバル（例：1分待ってから再起動・再監視）
+            // 状況に応じて、落ちたらすぐ再起動したい場合は秒数を短くしてください
+            _logger.LogInformation("次回の起動まで待機します...");
+            await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
+        }
+    }
+}
+
+
