@@ -1,9 +1,9 @@
-﻿using ConsoleApp1;
-using Microsoft.VisualBasic.FileIO;
+﻿using Microsoft.VisualBasic.FileIO;
 using Renci.SshNet;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices.JavaScript;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -12,9 +12,28 @@ namespace manage
 {
     public class SftpAccess
     {
-        public bool CreateControlFile(DocumentInfo info)
+        public enum SftpFunction
         {
-            return false;
+            Numbering = 4002,
+            Relation = 4004,
+            Registration = 4005
+        }
+
+        public static string GetSftpBaseName(SftpFunction func, int no)
+        {
+            var basename = $"XXXX_B-{func}_{no}_{DateTime.Now.ToString("yyyyMMddHHmmssfff")}";
+            return basename;
+        }
+
+        public SftpClient GetSftpClient()
+        {
+            // --- 設定情報 ---
+            string host = "://server.com";
+            string username = "your_username";
+            string password = "your_password";
+
+            var connectionInfo = new ConnectionInfo(host, username, new PasswordAuthenticationMethod(username, password));
+            return new SftpClient(connectionInfo);
         }
 
         public bool Connect()
@@ -36,111 +55,274 @@ namespace manage
             return true;
         }
 
-        public void func()
+        public void DeleteRemoteFilesInFolder(string remoteFolderPath)
         {
-            var host = "your-sftp-server.com";
-            var username = "your_username";
-            var password = "your_password";
-
-            // 1. ローカルの対象フォルダと、リモートの保存先を指定
-            string localFolder = @"C:\local\upload_files";
-            string remoteBaseDir = "/remote/uploads/daily_report";
-
-            // ローカルにフォルダがあるか確認
-            if (!Directory.Exists(localFolder))
-            {
-                Console.WriteLine("指定されたローカルフォルダが存在しません。");
-                return;
-            }
-
-            // アップロード対象のファイル一覧を取得
-            string[] localFiles = Directory.GetFiles(localFolder);
-
-            using (var client = new SftpClient(host, username, password))
+            using (var client = GetSftpClient())
             {
                 try
                 {
+                    Console.WriteLine("SFTPサーバーに接続中...");
                     client.Connect();
-                    Console.WriteLine("SFTPサーバに接続しました。");
 
-                    // 【機能1】アップロード先フォルダの自動作成
-                    // 階層が深い場合（例: /a/b/c）を考慮して作成する関数を呼び出す
-                    CreateRemoteDirectoryIfNeeded(client, remoteBaseDir);
-
-                    // 【機能2】複数ファイルをループ処理で一括アップロード
-                    foreach (var localPath in localFiles)
+                    // 指定フォルダが存在するか確認
+                    if (!client.Exists(remoteFolderPath))
                     {
-                        string fileName = Path.GetFileName(localPath);
-                        // リモート側のフルパスを生成 Linuxの区切り文字「/」にする
-                        string remotePath = $"{remoteBaseDir.TrimEnd('/')}/{fileName}";
+                        Console.WriteLine($"エラー: 指定されたフォルダが存在しません: {remoteFolderPath}");
+                        return;
+                    }
 
-                        Console.WriteLine($"\n[開始] {fileName} をアップロード中...");
+                    Console.WriteLine($"{remoteFolderPath} 内のファイルを検索中...");
 
-                        using (var localStream = File.OpenRead(localPath))
+                    // フォルダ内の項目をすべて取得し個々にファイルを削除
+                    var files = client.ListDirectory(remoteFolderPath);
+                    foreach (var file in files)
+                    {
+                        // ディレクトリは対象外
+                        if (file.IsDirectory)
+                            continue;
+
+                        // ファイルの削除を実行
+                        Console.WriteLine($"削除中: {file.Name} ...");
+                        client.DeleteFile(file.FullName);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"エラーが発生しました: {ex.Message}");
+                }
+                finally
+                {
+                    if (client.IsConnected)
+                    {
+                        client.Disconnect();
+                        Console.WriteLine("切断しました。");
+                    }
+                }
+            }
+        }
+
+        public void DeleteRemoteFiles(List<string> files)
+        {
+            if (files == null || files.Count == 0)
+            {
+                Console.WriteLine("削除対象のファイルが指定されていません。");
+                return;
+            }
+
+            // 3. クライアントの生成と自動切断（using）
+            using (var client = GetSftpClient())
+            {
+                try
+                {
+                    Console.WriteLine("SFTPサーバーに接続中...");
+                    client.Connect();
+
+                    // 4. ファイルのループ処理
+                    foreach (string remoteFilePath in files)
+                    {
+                        // フォルダ名とファイル名を安全に結合
+                        //string remoteFilePath = Path.Combine(remoteFolderPath, fileName).Replace("\\", "/");
+
+                        try
                         {
-                            // アップロード実行（上書き許可）
-                            client.UploadFile(localStream, remotePath, canOverride: true);
+                            // ファイルの存在確認をしてから削除
+                            if (client.Exists(remoteFilePath))
+                            {
+                                client.DeleteFile(remoteFilePath);
+                            }
+                            else
+                            {
+                                Console.WriteLine($"[スキップ] ファイルが存在しません: {remoteFilePath}");
+                            }
                         }
-
-                        // 【機能3】アップロードが成功したかをExistsで確認
-                        if (client.Exists(remotePath))
+                        catch (Exception ex)
                         {
-                            // 確認完了としてファイルサイズを取得し、整合性をチェックするとより安全です
-                            var sftpFile = client.Get(remotePath);
-                            Console.WriteLine($"[成功] {fileName} のアップロードを確認しました。(サイズ: {sftpFile.Attributes.Size} バイト)");
-                        }
-                        else
-                        {
-                            Console.WriteLine($"[失敗] {fileName} はサーバ上に確認できませんでした。");
+                            // 1つのファイルでエラーが起きても、次のファイルの処理を続ける
+                            Console.WriteLine($"[削除失敗] {remoteFilePath} の処理中にエラー: {ex.Message}");
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"システムエラー: {ex.Message}");
+                    // 接続自体に失敗した場合などのエラーハンドリング
+                    Console.WriteLine($"SFTP通信全体でエラーが発生しました: {ex.Message}");
                 }
                 finally
                 {
-                    client.Disconnect();
-                    Console.WriteLine("\nSFTP接続を切断しました。");
+                    if (client.IsConnected)
+                    {
+                        client.Disconnect();    // 明示的に切断
+                        Console.WriteLine("SFTPサーバーから切断しました。");
+                    }
                 }
             }
         }
-        /// <summary>
-        /// リモートフォルダが存在しない場合、階層を遡って自動作成する補助メソッド
-        /// </summary>
-        static void CreateRemoteDirectoryIfNeeded(SftpClient client, string remoteDirPath)
+        public void DownloadRemoteFiles(List<string> files, string localFolderPath)
         {
-            // すでに存在すれば何もしない
-            if (client.Exists(remoteDirPath)) return;
-
-            // 親ディレクトリのパスを取得して再帰的に作成する処理
-            string parentDir = Path.GetDirectoryName(remoteDirPath)?.Replace("\\", "/");
-
-            if (!string.IsNullOrEmpty(parentDir) && parentDir != "/")
+            // 1. 引数の事前チェック
+            if (files == null || files.Count == 0)
             {
-                CreateRemoteDirectoryIfNeeded(client, parentDir);
+                Console.WriteLine("ダウンロード対象のファイルが指定されていません。");
+                return;
             }
 
-            // フォルダを作成
-            client.CreateDirectory(remoteDirPath);
-            Console.WriteLine($"リモートフォルダを作成しました: {remoteDirPath}");
+            // 2. 保存先ローカルフォルダがなければ自動作成
+            if (!Directory.Exists(localFolderPath))
+            {
+                // なければエラー
+                return;
+            }
+
+            using (var client = GetSftpClient())
+            {
+                try
+                {
+                    Console.WriteLine("SFTPサーバーに接続中...");
+                    client.Connect();
+
+                    // 4. ファイルのループ処理
+                    foreach (string remoteFilePath in files)
+                    {
+                        // リモート側とローカル側のフルパスをそれぞれ安全に結合
+                        var fileName = Path.GetFileName(remoteFilePath);
+                        string localFilePath = Path.Combine(localFolderPath, fileName);
+
+                        try
+                        {
+                            // サーバー側にファイルが存在するか確認
+                            if (client.Exists(remoteFilePath))
+                            {
+                                Console.WriteLine($"ダウンロード中: {fileName} ...");
+
+                                // ローカルにファイルを生成してダウンロード（既存ファイルがある場合は上書き）
+                                using (var fileStream = File.Create(localFilePath))
+                                {
+                                    client.DownloadFile(remoteFilePath, fileStream);
+                                }
+                            }
+                            else
+                            {
+                                Console.WriteLine($"[エラー] サーバー上にファイルが存在しません: {fileName}");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            // 1つのファイルでエラーが起きても、次のファイルの処理を続ける
+                            Console.WriteLine($"[失敗] {fileName} のダウンロード中にエラー: {ex.Message}");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"SFTP通信全体でエラーが発生しました: {ex.Message}");
+                }
+                finally
+                {
+                    if (client.IsConnected)
+                    {
+                        client.Disconnect(); // 明示的に切断
+                        Console.WriteLine("SFTPサーバーから切断しました。");
+                    }
+                }
+            }
+        }
+        public bool ExistsRemoteFile(string remoteFilePath)
+        {
+            using (var client = GetSftpClient())
+            {
+                try
+                {
+                    Console.WriteLine("SFTPサーバーに接続中...");
+                    client.Connect();
+
+                    // ファイルの存在チェック
+                    if (client.Exists(remoteFilePath))
+                    {
+                        Console.WriteLine($"【存在します】: {remoteFilePath}");
+
+                        // (応用) 存在する場合だけ、ファイル情報を取得する例
+                        var fileAttributes = client.GetAttributes(remoteFilePath);
+                        Console.WriteLine($"サイズ: {fileAttributes.Size} バイト");
+                        Console.WriteLine($"最終更新日時: {fileAttributes.LastWriteTime}");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"【存在しません】: {remoteFilePath}");
+                        return false;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"エラーが発生しました: {ex.Message}");
+                }
+                finally
+                {
+                    if (client.IsConnected)
+                    {
+                        client.Disconnect();
+                        Console.WriteLine("切断しました。");
+                    }
+                }
+
+                return true;
+            }
         }
 
-        public enum SftpFunction
+        public void UploadLocalFiles(List<string> files, string remoteFolderPath)
         {
-            /// <summary>
-            /// 
-            /// </summary>
-            Numbering = 0,
-            /// <summary>
-            /// 
-            /// </summary>
-            Relation = 1,
-            /// <summary>
-            /// 
-            /// </summary>
-            Registration = 2
+            if (files.Count == 0)
+            {
+                Console.WriteLine("アップロードするファイルがありません。");
+                return;
+            }
+
+            // 接続情報の作成
+
+            using (var client = GetSftpClient())
+            {
+                try
+                {
+                    Console.WriteLine("SFTPサーバーに接続中...");
+                    client.Connect();
+
+                    // リモートの指定フォルダが存在しない場合は作成
+                    if (!client.Exists(remoteFolderPath))
+                    {
+                        // エラー
+                        Console.WriteLine($"リモートフォルダを作成します: {remoteFolderPath}");
+                        return; 
+                    }
+
+                    foreach (string localFilePath in files)
+                    {
+                        // リモート側のフルパスを生成
+                        string fileName = Path.GetFileName(localFilePath);
+                        string remoteFilePath = Path.Combine(remoteFolderPath, fileName).Replace("\\", "/");
+
+                        Console.WriteLine($"アップロード中: {fileName} ...");
+
+                        // ファイルを読み込んでアップロード実行
+                        using (var fileStream = File.OpenRead(localFilePath))
+                        {
+                            client.UploadFile(fileStream, remoteFilePath, true); // trueで同名ファイルは上書き
+                        }
+                    }
+
+                    Console.WriteLine("すべてのファイルのアップロードが完了しました。");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"エラーが発生しました: {ex.Message}");
+                }
+                finally
+                {
+                    if (client.IsConnected)
+                    {
+                        client.Disconnect();
+                        Console.WriteLine("切断しました。");
+                    }
+                }
+            }
         }
 
         public static void CreateSftpControlFile()
@@ -157,23 +339,15 @@ namespace manage
             File.WriteAllLines(filePath, lines);
         }
 
-        public static string GetSftpCOntrolFileBasename(SftpFunction func, int no)
-        {
-            var basename = $"XXXX_B-{func}_{no}_{DateTime.Now.ToString("yyyyMMddHHmmssfff")}";
-            return basename;
-        }
 
-        const string query = "SELECT id, name, email " +
-                     "FROM users " +
-                     "WHERE status = 'active' " +
-                     "ORDER BY created_at DESC;";
-        public static void GetTsvValue()
+        // これは使用しない
+        public static void GetTsvValue(string filePath)
         {
-            string filePath = "sample.tsv";
             if (!File.Exists(filePath))
             {
-                // error
+                return;
             }
+
             using (var parser = new TextFieldParser(filePath))
             {
                 parser.TextFieldType = FieldType.Delimited;
@@ -216,23 +390,25 @@ namespace manage
             }
         }
 
-        public class ApiResponse
+        public class SftpResult
         {
             public string ReturnCode { get; set; } = string.Empty;
-            public ResultContent Results { get; set; } = new();
+            public SftpResultContent Results { get; set; } = new();
         }
 
-        public class ResultContent
+        public class SftpResultContent
         {
             public string Error { get; set; } = string.Empty;
         }
 
-        public static void ResultJson()
+        public static bool IsSftpResultSuccess(string filePath)
         {
-            string jsonString = @"{
-  ""ReturnCode"": ""00"",
-  ""RESULTS"": { ""ERROR"": """" }
-}";
+            // ファイルが存在しない場合のチェック
+            if (!File.Exists(filePath))
+            {
+                Console.WriteLine($"エラー: ファイルが見つかりません ({filePath})");
+                return false;
+            }
 
             // 大文字小文字を区別しないオプションを設定
             var options = new JsonSerializerOptions
@@ -240,12 +416,22 @@ namespace manage
                 PropertyNameCaseInsensitive = true
             };
 
-            // デシリアライズ
-            ApiResponse? response = JsonSerializer.Deserialize<ApiResponse>(jsonString, options);
+            try
+            {
+                // デシリアライズ
+                string jsonString = File.ReadAllText(filePath);
+                SftpResult? response = JsonSerializer.Deserialize<SftpResult>(jsonString, options);
+                if (response == null)
+                    return false;
 
-            // 結果の確認
-            Console.WriteLine($"ReturnCode: {response?.ReturnCode}");       // 出力: 00
-            Console.WriteLine($"Error: {response?.Results?.Error}");
+                if (response.ReturnCode == "00")
+                    return true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"ファイル読み込みまたは解析中にエラーが発生しました: {ex.Message}");
+            }
+            return false;
         }
     }
 }

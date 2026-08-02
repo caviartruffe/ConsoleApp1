@@ -8,17 +8,17 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace ConsoleApp1
+namespace manage
 {
     public class MailUtil
     {
-        public static async Task SendNormal(DocumentInfo info)
+        public static async Task SendNormal(InfoDocument info)
         {
             var message = ComposeMessage(info, Settings.Default.MessageTextNormal);
             await SendMessage(message);
         }
 
-        public static async Task SendError(DocumentInfo info)
+        public static async Task SendError(InfoDocument info)
         {
             var message = ComposeMessage(info, Settings.Default.MessageTextError);
             await SendMessage(message);
@@ -55,7 +55,7 @@ namespace ConsoleApp1
             }
         }
 
-        private static MimeMessage ComposeMessage(DocumentInfo info, string template)
+        private static MimeMessage ComposeMessage(InfoDocument info, string template)
         {
             // 1. メールメッセージの作成
             var message = new MimeMessage();

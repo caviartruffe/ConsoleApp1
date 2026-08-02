@@ -1,11 +1,11 @@
-﻿using ConsoleApp1;
-using log4net;
+﻿using log4net;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using static manage.FileUtil;
 
 namespace manage
 {
@@ -52,37 +52,6 @@ namespace manage
             return Path.Combine(Settings.Default.RegFolder, regNumber);
         }
 
-        public enum FolderState
-        {
-            Uploaded,
-            Converted,
-            Sent,
-            None
-        }
-
-        /// <summary>
-        /// フォルダ処理進行状態を取得
-        /// </summary>
-        /// <param name="path"></param>
-        /// <returns></returns>
-        public static FolderState GetFolderState(string path)
-        {
-            if (File.Exists(Path.Combine(path, ".send.done")))
-            {
-                return FolderState.Sent;
-            }
-            if (File.Exists(Path.Combine(path, ".convert.done")))
-            {
-                return FolderState.Converted;
-            }
-            if (File.Exists(Path.Combine(path, ".upload.done")))
-            {
-                return FolderState.Uploaded;
-            }
-            // チェックポイントファイルのないフォルダは対象外
-            return FolderState.None;
-        }
-
         public enum FileType
         {
             /// <summary>
@@ -94,9 +63,9 @@ namespace manage
             /// </summary>
             DxfFile,
             /// <summary>
-            /// iCAD/MXファイル
+            /// CADファイル
             /// </summary>
-            MxFile,
+            CadFile,
             /// <summary>
             /// その他
             /// </summary>
@@ -132,29 +101,13 @@ namespace manage
             }
             else if (audioExtensions.Contains(extension))
             {
-                fileType = FileType.MxFile;
+                fileType = FileType.CadFile;
             }
             else
             {
                 fileType = FileType.Others;
             }
             return fileType;
-        }
-
-        public enum SftpFunction
-        {
-            /// <summary>
-            /// 
-            /// </summary>
-            Numbering = 0,
-            /// <summary>
-            /// 
-            /// </summary>
-            Relation = 1,
-            /// <summary>
-            /// 
-            /// </summary>
-            Registration = 2
         }
 
         public static void CreateSftpControlFile()
@@ -169,12 +122,6 @@ namespace manage
             // ファイルパスを指定して出力（UTF-8）
             string filePath = "output.tsv";
             File.WriteAllLines(filePath, lines);
-        }
-
-        public static string GetSftpCOntrolFileBasename(SftpFunction func, int no)
-        {
-            var basename = $"XXXX_B-{func}_{no}_{DateTime.Now.ToString("yyyyMMddHHmmssfff")}";
-            return basename;
         }
     }
 }
