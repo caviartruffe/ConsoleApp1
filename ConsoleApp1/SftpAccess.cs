@@ -19,13 +19,166 @@ namespace manage
             Registration = 4005
         }
 
+        public static string _numberingInterfacePath = "/IF-2002/";
+        public static string _numberingResultPath = _numberingInterfacePath + "Result/";
+        public static string _numberingArchivePath = _numberingInterfacePath + "Archive/";
+        public static string _relationInterfacePath = "/IF-2004/";
+        public static string _relationResultPath = _relationInterfacePath + "Result/";
+        public static string _relationArchivePath = _relationInterfacePath + "Archive/";
+        public static string _registrationInterfacePath = "/IF-2005/";
+        public static string _registrationResultPath = _registrationInterfacePath + "Result/";
+        public static string _registrationArchivePath = _registrationInterfacePath + "Archive/";
+
+        /*
+            [FolderStates.NumberingRequest] = ".numbering.request",
+            [FolderStates.NumberingDone] = ".numbering.done",
+            [FolderStates.RelationRequest] = ".relation.request",
+            [FolderStates.RelationDone] = ".relation.done",
+            [FolderStates.RegistrationRequest] = ".registration.request",
+            [FolderStates.RegistrationDone] = ".registration.done"
+         */
+
+        public static void RequestNumbering(InfoDocument docInfo)
+        {
+            var baename = GetSftpBaseName(SftpFunction.Numbering, docInfo.DocRegId);
+            var tsvPath = Path.Combine(docInfo.FolderPath, baename + ".tsv");
+            // TSV生成
+
+            // TSVアップロード
+            var files = new List<string>() { tsvPath };
+            UploadLocalFiles(files, _numberingInterfacePath);
+        }
+
+        public static void RequestRelation(InfoDocument docInfo)
+        {
+            var baename = GetSftpBaseName(SftpFunction.Relation, docInfo.DocRegId);
+            var tsvPath = Path.Combine(docInfo.FolderPath, baename + ".tsv");
+            // TSV生成
+
+            // TSVアップロード
+            var files = new List<string>() { tsvPath };
+            UploadLocalFiles(files, _relationInterfacePath);
+        }
+
+        public static bool RequestRegistration(InfoDocument docInfo)
+        {
+            try
+            {
+                var baename = GetSftpBaseName(SftpFunction.Registration, docInfo.DocRegId);
+                var tsvPath = Path.Combine(docInfo.FolderPath, baename + ".tsv");
+                var lstPath = Path.Combine(docInfo.FolderPath, baename + ".lst");
+
+                // TSV生成
+
+                // LST生成
+
+                // TSV/実ファイル/LSTアップロード
+                var files = new List<string>() { tsvPath };
+                foreach (var file in docInfo.UploadFileInfos)
+                {
+                    files.Add(Path.Combine(docInfo.FolderPath, file.FileName));
+                    if (!string.IsNullOrEmpty(file.PdfFileName))
+                        files.Add(Path.Combine(docInfo.FolderPath, file.PdfFileName));
+                }
+                files.Add(lstPath); // lstは最後に追加
+                UploadLocalFiles(files, _registrationInterfacePath);
+            }
+            catch (Exception ex)
+            {
+                return false;
+            }
+            return true;
+        }
+
+        public static void TerminateNumbering(InfoDocument docInfo, bool force = false)
+        {
+            // Resultダウンロード
+            var baename = GetSftpBaseName(SftpFunction.Registration, docInfo.DocRegId);
+            var resultTsvPath = _numberingResultPath + baename + ".tsv";
+            var donePath = resultTsvPath + ".done";
+
+            var files = new List<string>() { resultTsvPath, donePath };
+            DownloadRemoteFiles(files, docInfo.FolderPath);
+
+            //Archive/Result削除
+            var tsvPath = _numberingArchivePath + baename + ".tsv";
+            files.Add(tsvPath);
+            if (!force)
+            {
+                // 個別ファイル削除
+                DeleteRemoteFiles(files);
+            }
+            else
+            {
+                var folders = new List<string>() { _numberingResultPath, _numberingArchivePath };
+                DeleteRemoteFilesInFolder(folders);
+            }
+        }
+
+        public static void TerminateRelation(InfoDocument docInfo, bool force = false)
+        {
+            // Resultダウンロード
+            var baename = GetSftpBaseName(SftpFunction.Registration, docInfo.DocRegId);
+            var resultTsvPath = _relationResultPath + baename + ".tsv";
+            var donePath = resultTsvPath + ".done";
+
+            var files = new List<string>() { resultTsvPath, donePath };
+            DownloadRemoteFiles(files, docInfo.FolderPath);
+
+            //Archive/Result削除
+            var tsvPath = _relationArchivePath + baename + ".tsv";
+            files.Add(tsvPath);
+            if (!force)
+            {
+                // 個別ファイル削除
+                DeleteRemoteFiles(files);
+            }
+            else
+            {
+                var folders = new List<string>() { _relationResultPath, _relationArchivePath };
+                DeleteRemoteFilesInFolder(folders);
+            }
+        }
+
+        public static void TerminateRegistration(InfoDocument docInfo, bool force = false)
+        {
+            // Resultダウンロード
+            var baename = GetSftpBaseName(SftpFunction.Registration, docInfo.DocRegId);
+            var resultTsvPath = _registrationResultPath + baename + ".tsv";
+            var donePath = resultTsvPath + ".done";
+
+            var files = new List<string>() { resultTsvPath, donePath };
+            DownloadRemoteFiles(files, docInfo.FolderPath);
+
+            //Archive/Result削除
+            files.Add(_registrationArchivePath + baename + ".tsv");
+            files.Add(_registrationArchivePath + baename + ".lst");
+            foreach (var file in docInfo.UploadFileInfos)
+            {
+                files.Add(_registrationArchivePath + file.FileName);
+                if (!string.IsNullOrEmpty(file.PdfFileName))
+                    files.Add(_registrationArchivePath + file.PdfFileName);
+            }
+            if (!force)
+            {
+                // 個別ファイル削除
+                DeleteRemoteFiles(files);
+            }
+            else
+            {
+                var folders = new List<string>() { _registrationResultPath, _registrationArchivePath };
+                DeleteRemoteFilesInFolder(folders);
+            }
+        }
+
+
         public static string GetSftpBaseName(SftpFunction func, int no)
         {
             var basename = $"XXXX_B-{func}_{no}_{DateTime.Now.ToString("yyyyMMddHHmmssfff")}";
             return basename;
         }
 
-        public SftpClient GetSftpClient()
+        public static SftpClient GetSftpClient()
         {
             // --- 設定情報 ---
             string host = "://server.com";
@@ -55,7 +208,7 @@ namespace manage
             return true;
         }
 
-        public void DeleteRemoteFilesInFolder(string remoteFolderPath)
+        public static void DeleteRemoteFilesInFolder(List<string> remoteFolderPaths)
         {
             using (var client = GetSftpClient())
             {
@@ -64,26 +217,29 @@ namespace manage
                     Console.WriteLine("SFTPサーバーに接続中...");
                     client.Connect();
 
-                    // 指定フォルダが存在するか確認
-                    if (!client.Exists(remoteFolderPath))
+                    foreach (var remoteFolderPath in remoteFolderPaths)
                     {
-                        Console.WriteLine($"エラー: 指定されたフォルダが存在しません: {remoteFolderPath}");
-                        return;
-                    }
+                        // 指定フォルダが存在するか確認
+                        if (!client.Exists(remoteFolderPath))
+                        {
+                            Console.WriteLine($"エラー: 指定されたフォルダが存在しません: {remoteFolderPath}");
+                            return;
+                        }
 
-                    Console.WriteLine($"{remoteFolderPath} 内のファイルを検索中...");
+                        Console.WriteLine($"{remoteFolderPath} 内のファイルを検索中...");
 
-                    // フォルダ内の項目をすべて取得し個々にファイルを削除
-                    var files = client.ListDirectory(remoteFolderPath);
-                    foreach (var file in files)
-                    {
-                        // ディレクトリは対象外
-                        if (file.IsDirectory)
-                            continue;
+                        // フォルダ内の項目をすべて取得し個々にファイルを削除
+                        var files = client.ListDirectory(remoteFolderPath);
+                        foreach (var file in files)
+                        {
+                            // ディレクトリは対象外
+                            if (file.IsDirectory)
+                                continue;
 
-                        // ファイルの削除を実行
-                        Console.WriteLine($"削除中: {file.Name} ...");
-                        client.DeleteFile(file.FullName);
+                            // ファイルの削除を実行
+                            Console.WriteLine($"削除中: {file.Name} ...");
+                            client.DeleteFile(file.FullName);
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -101,9 +257,9 @@ namespace manage
             }
         }
 
-        public void DeleteRemoteFiles(List<string> files)
+        public static void DeleteRemoteFiles(List<string> remoteFiles)
         {
-            if (files == null || files.Count == 0)
+            if (remoteFiles == null || remoteFiles.Count == 0)
             {
                 Console.WriteLine("削除対象のファイルが指定されていません。");
                 return;
@@ -118,7 +274,7 @@ namespace manage
                     client.Connect();
 
                     // 4. ファイルのループ処理
-                    foreach (string remoteFilePath in files)
+                    foreach (string remoteFilePath in remoteFiles)
                     {
                         // フォルダ名とファイル名を安全に結合
                         //string remoteFilePath = Path.Combine(remoteFolderPath, fileName).Replace("\\", "/");
@@ -157,10 +313,10 @@ namespace manage
                 }
             }
         }
-        public void DownloadRemoteFiles(List<string> files, string localFolderPath)
+        public static void DownloadRemoteFiles(List<string> remoteFiles, string localFolderPath)
         {
             // 1. 引数の事前チェック
-            if (files == null || files.Count == 0)
+            if (remoteFiles == null || remoteFiles.Count == 0)
             {
                 Console.WriteLine("ダウンロード対象のファイルが指定されていません。");
                 return;
@@ -181,7 +337,7 @@ namespace manage
                     client.Connect();
 
                     // 4. ファイルのループ処理
-                    foreach (string remoteFilePath in files)
+                    foreach (string remoteFilePath in remoteFiles)
                     {
                         // リモート側とローカル側のフルパスをそれぞれ安全に結合
                         var fileName = Path.GetFileName(remoteFilePath);
@@ -226,7 +382,7 @@ namespace manage
                 }
             }
         }
-        public bool ExistsRemoteFile(string remoteFilePath)
+        public static bool ExistsRemoteFile(string remoteFilePath)
         {
             using (var client = GetSftpClient())
             {
@@ -268,7 +424,7 @@ namespace manage
             }
         }
 
-        public void UploadLocalFiles(List<string> files, string remoteFolderPath)
+        public static void UploadLocalFiles(List<string> files, string remoteFolderPath)
         {
             if (files.Count == 0)
             {

@@ -97,7 +97,7 @@ namespace manage
                 }
 
                 // SftpManagerにSFTP連携を依頼
-                if (!_sftpPool.TryAdd(docInfo.RegId, docInfo))
+                if (!_sftpPool.TryAdd(docInfo.DocRegId, docInfo))
                 {
                     // falseは基本的に起きない
                 }
