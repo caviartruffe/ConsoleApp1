@@ -61,6 +61,7 @@ namespace manage
 
         static async Task ConvertFileQueueAsync(InfoUploadFile.FileTypes type, ChannelReader<InfoUploadFile> reader)
         {
+
             // 割り当てられた種類専用のループ
             await foreach (var file in reader.ReadAllAsync())
             {

@@ -102,12 +102,6 @@ namespace manage
                     // falseは基本的に起きない
                 }
 
-                var sftpState = await SftpManager.RunAsync(_sftpPool);
-                if (!convertState)
-                {
-                    // エラーならここでおわり
-                    return;
-                }
                 // UploadFolder内の対象を削除
 
                 // 成功メール送信
